@@ -33,7 +33,7 @@ const (
 	checkInterval = 2 * time.Minute
 )
 
-// Log is a CloudWatch log line
+// Log is a CloudWatch K8s audit log line
 type Log struct {
 	Message string `json:"message"`
 }
@@ -200,12 +200,12 @@ func main() {
 					continue
 				}
 			} else {
-				fmt.Printf("Object '%s' was not (fully) processed, not moving it to the processed folder", *object.Key)
+				fmt.Printf("Object '%s' was not (fully) processed, not moving it to the processed folder.\n", *object.Key)
 			}
 		}
 
 		if len(objects) == 0 {
-			fmt.Printf("No new Firehose events found, waiting for %s minutes", checkInterval)
+			fmt.Println("No new Firehose events found, waiting for next check interval.")
 			time.Sleep(checkInterval)
 		}
 	}
