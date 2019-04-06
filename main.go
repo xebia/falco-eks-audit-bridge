@@ -83,7 +83,7 @@ func main() {
 	// Disable the verbose debug logging for now
 	httpClient.Logger = nil
 
-	// Start of Firehove events processing
+	// Start of Firehose events processing
 
 	for {
 		res, err := s3client.ListObjects(&s3.ListObjectsInput{
