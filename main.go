@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"sort"
 	"strings"
@@ -15,6 +16,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/jpillora/backoff"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const (
@@ -33,6 +36,23 @@ const (
 	checkInterval = 2 * time.Minute
 )
 
+var (
+	auditEvents = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "feab_audit_event_total",
+			Help: "How many audit logs have been processed.",
+		},
+	)
+
+	errorEvents = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "feab_errors_total",
+			Help: "How many errors encountered.",
+		},
+		[]string{"type"},
+	)
+)
+
 // Log is a CloudWatch K8s audit log line
 type Log struct {
 	Message string `json:"message"`
@@ -44,9 +64,24 @@ type Event struct {
 	LogEvents   []Log  `json:"logEvents"`
 }
 
-func main() {
+func init() {
 
-	// Initialization
+	// Track the amount of K8s audit logs processed and errors encountered
+	prometheus.MustRegister(auditEvents)
+	prometheus.MustRegister(errorEvents)
+
+	// Register the HTTP handlers
+	http.Handle("/metrics", promhttp.Handler())
+	http.HandleFunc("/health", func(rw http.ResponseWriter, r *http.Request) {
+		rw.WriteHeader(http.StatusOK)
+	})
+
+	// Start the monitoring service
+	go http.ListenAndServe(":8080", nil)
+	fmt.Printf("Started monitoring services\n")
+}
+
+func main() {
 
 	bucket, ok := os.LookupEnv("BUCKET")
 	if !ok {
@@ -84,8 +119,6 @@ func main() {
 	// Disable the verbose debug logging for now
 	httpClient.Logger = nil
 
-	// Start of Firehose events processing
-
 	for {
 		res, err := s3client.ListObjects(&s3.ListObjectsInput{
 			Bucket: aws.String(bucket),
@@ -95,6 +128,7 @@ func main() {
 		if err != nil {
 			d := b.Duration()
 			fmt.Printf("Error listing bucket:\n%v\nRetrying in %s", err, d)
+			errorEvents.With(prometheus.Labels{"type": "s3-list"}).Inc()
 			time.Sleep(d)
 			continue
 		}
@@ -127,6 +161,7 @@ func main() {
 
 				if err != nil {
 					fmt.Printf("Could not delete file from the Firehose folder:\n%v\n", err)
+					errorEvents.With(prometheus.Labels{"type": "s3-delete"}).Inc()
 					continue
 				}
 			}
@@ -139,6 +174,7 @@ func main() {
 				})
 			if err != nil {
 				fmt.Printf("Could not download the Firehose events file:\n%v\n", err)
+				errorEvents.With(prometheus.Labels{"type": "s3-get"}).Inc()
 				continue
 			}
 
@@ -146,6 +182,7 @@ func main() {
 			contents, err := gzip.NewReader(file.Body)
 			if err != nil {
 				fmt.Printf("Could not decompress the Firehose events:\n%v\n", err)
+				errorEvents.With(prometheus.Labels{"type": "gzip"}).Inc()
 				continue
 			}
 
@@ -162,16 +199,17 @@ func main() {
 					break
 				} else if err != nil {
 					fmt.Printf("Unable to (fully) parse Firehose event:\n%v\n", err)
+					errorEvents.With(prometheus.Labels{"type": "parsing"}).Inc()
 					break
 				}
 
 				if event.MessageType == dataEventMessageType {
 					for _, log := range event.LogEvents {
-
 						// Post the audit log to Falco for compliance checking
 						res, err := httpClient.Post(falcoEndpoint, "application/json", strings.NewReader(log.Message))
 						if err != nil || res.StatusCode != 200 {
 							fmt.Printf("Unable to send the audit log to Falco:\n%v\n", err)
+							errorEvents.With(prometheus.Labels{"type": "falco"}).Inc()
 							break DECODER
 						}
 						res.Body.Close()
@@ -180,6 +218,9 @@ func main() {
 			}
 
 			if processed {
+				// Track successfull processing
+				auditEvents.Inc()
+
 				_, err = s3client.CopyObject(&s3.CopyObjectInput{
 					Bucket:     aws.String(bucket),
 					CopySource: aws.String(fmt.Sprintf("/%s/%s", bucket, *object.Key)),
@@ -188,6 +229,7 @@ func main() {
 
 				if err != nil {
 					fmt.Printf("Could not copy file to processed folder:\n%v\n", err)
+					errorEvents.With(prometheus.Labels{"type": "s3-copy"}).Inc()
 					continue
 				}
 
@@ -198,6 +240,7 @@ func main() {
 
 				if err != nil {
 					fmt.Printf("Could not delete file from the Firehose folder:\n%v\n", err)
+					errorEvents.With(prometheus.Labels{"type": "s3-delete"}).Inc()
 					continue
 				}
 			} else {
