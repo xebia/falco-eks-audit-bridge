@@ -57,6 +57,7 @@ func main() {
 	falcoEndpoint, ok := os.LookupEnv("FALCO_ENDPOINT")
 	if !ok {
 		fmt.Println("Environment variable 'FALCO_ENDPOINT' not set, exiting.")
+		os.Exit(1)
 	}
 
 	region, ok := os.LookupEnv("AWS_DEFAULT_REGION")
