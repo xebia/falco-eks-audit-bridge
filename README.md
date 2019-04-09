@@ -18,7 +18,7 @@ Two environment variables are required when starting the bridge:
 
 ## Deployment
 
-This tool is meant to run as a service within Kubernetes. To that end, we have provided a Helm chart which makes deployment easy. You can of course create your own deployment configuration for any system with the docker image.
+This tool is meant to run as a service within Kubernetes. To that end, we have provided a Helm chart (TODO) which makes deployment easy. You can of course create your own deployment configuration for any system with the docker image.
 
 The Helm chart contains several configuration options that you can override for your specific environment.
 
