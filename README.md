@@ -22,6 +22,8 @@ This tool is meant to run as a service within Kubernetes. To that end, we have p
 
 The Helm chart contains several configuration options that you can override for your specific environment.
 
+The docker image for this tool can be found here: https://hub.docker.com/r/xebia/falco-eks-audit-bridge
+
 ## Monitoring
 
 The bridge exposes two endpoints for monitoring:
