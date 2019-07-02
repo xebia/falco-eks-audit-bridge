@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
@@ -79,6 +80,21 @@ func init() {
 	// Start the monitoring service
 	go http.ListenAndServe(":8080", nil)
 	fmt.Printf("Started monitoring services\n")
+}
+
+// validJSON parses the JSON while discarding the contents.
+// It returns true for valid JSON, false otherwise.
+func validJSON(data string) bool {
+	dec := json.NewDecoder(bytes.NewReader([]byte(data)))
+	for {
+		_, err := dec.Token()
+		if err == io.EOF {
+			return true
+		}
+		if err != nil {
+			return false
+		}
+	}
 }
 
 func main() {
@@ -205,14 +221,16 @@ func main() {
 
 				if event.MessageType == dataEventMessageType {
 					for _, log := range event.LogEvents {
-						// Post the audit log to Falco for compliance checking
-						res, err := httpClient.Post(falcoEndpoint, "application/json", strings.NewReader(log.Message))
-						if err != nil || res.StatusCode != 200 {
-							fmt.Printf("Unable to send the audit log to Falco:\n%v\n", err)
-							errorEvents.With(prometheus.Labels{"type": "falco"}).Inc()
-							break DECODER
+						if validJSON(log.Message) {
+							// Post the audit log to Falco for compliance checking
+							res, err := httpClient.Post(falcoEndpoint, "application/json", strings.NewReader(log.Message))
+							if err != nil || res.StatusCode != 200 {
+								fmt.Printf("Unable to send the audit log to Falco.\nLog: %s, Code: %d, Error: %v\n", log.Message, res.StatusCode, err)
+								errorEvents.With(prometheus.Labels{"type": "falco"}).Inc()
+								break DECODER
+							}
+							res.Body.Close()
 						}
-						res.Body.Close()
 					}
 				}
 			}
