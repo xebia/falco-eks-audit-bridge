@@ -224,11 +224,18 @@ func main() {
 						if validJSON(log.Message) {
 							// Post the audit log to Falco for compliance checking
 							res, err := httpClient.Post(falcoEndpoint, "application/json", strings.NewReader(log.Message))
-							if err != nil || res.StatusCode != 200 {
-								fmt.Printf("Unable to send the audit log to Falco.\nLog: %s, Code: %d, Error: %v\n", log.Message, res.StatusCode, err)
+							if err != nil {
+								fmt.Printf("Unable to send the audit log to Falco.\nError: %v\n", err)
 								errorEvents.With(prometheus.Labels{"type": "falco"}).Inc()
 								break DECODER
 							}
+
+							if res.StatusCode != 200 {
+								fmt.Printf("Falco did not accept the audit log\nLog: %s, Code: %d\n", log.Message, res.StatusCode)
+								errorEvents.With(prometheus.Labels{"type": "falco"}).Inc()
+								break DECODER
+							}
+
 							res.Body.Close()
 						}
 					}
