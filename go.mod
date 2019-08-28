@@ -6,5 +6,6 @@ require (
 	github.com/aws/aws-sdk-go v1.19.11
 	github.com/hashicorp/go-retryablehttp v0.5.3
 	github.com/jpillora/backoff v0.0.0-20180909062703-3050d21c67d7
+	github.com/pkg/errors v0.8.1
 	github.com/prometheus/client_golang v0.9.2
 )

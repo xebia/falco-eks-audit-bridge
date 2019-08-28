@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"github.com/pkg/errors"
 	"io"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/jpillora/backoff"
 	"github.com/prometheus/client_golang/prometheus"
@@ -97,6 +99,53 @@ func validJSON(data string) bool {
 	}
 }
 
+func checkReadiness(falcoEndpoint string, bucket_name string, region string) error {
+
+	httpClient := retryablehttp.NewClient()
+	_, err := httpClient.Get(falcoEndpoint)
+
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("error: %s is unreachable", falcoEndpoint))
+	}
+
+	sess := session.Must(session.NewSession(&aws.Config{
+		Region: aws.String(region),
+	}))
+	s3client := s3.New(sess)
+
+	_, err = s3client.ListObjects(&s3.ListObjectsInput{
+		Bucket: aws.String(bucket_name),
+		Prefix: aws.String("/"),
+	})
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("error: fail to list object. bucket name is %s", bucket_name))
+	}
+
+	buf := bytes.NewReader([]byte("hello"))
+
+	uploader := s3manager.NewUploader(sess)
+	upParams := &s3manager.UploadInput{
+		Bucket: aws.String(bucket_name),
+		Key:    aws.String(fmt.Sprintf("%s", "test")),
+		Body:   buf,
+	}
+
+	_, err = uploader.Upload(upParams)
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("error: fail to upload object. bucket name is %s", bucket_name))
+	}
+
+	_, err = s3client.DeleteObject(&s3.DeleteObjectInput{
+		Bucket: aws.String(bucket_name),
+		Key:    aws.String(fmt.Sprintf("%s", "test")),
+	})
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("error: fail to delete object. bucket name is %s", bucket_name))
+	}
+
+	return nil
+}
+
 func main() {
 
 	bucket, ok := os.LookupEnv("BUCKET")
@@ -121,6 +170,11 @@ func main() {
 		prefix = firehosePrefix
 	}
 
+	skip_error_log, ok := os.LookupEnv("SKIP_ERROR_LOG")
+	if !ok {
+		skip_error_log = "false"
+	}
+
 	sess := session.Must(session.NewSession(&aws.Config{
 		Region: aws.String(region),
 	}))
@@ -128,6 +182,13 @@ func main() {
 
 	b := &backoff.Backoff{
 		Jitter: true,
+	}
+
+	err := checkReadiness(falcoEndpoint, bucket, region)
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	httpClient := retryablehttp.NewClient()
@@ -270,6 +331,27 @@ func main() {
 				}
 			} else {
 				fmt.Printf("Object '%s' was not (fully) processed, not moving it to the processed folder.\n", *object.Key)
+
+				if skip_error_log == "true" {
+					_, err = s3client.CopyObject(&s3.CopyObjectInput{
+						Bucket:     aws.String(bucket),
+						CopySource: aws.String(fmt.Sprintf("/%s/%s", bucket, *object.Key)),
+						Key:        aws.String(fmt.Sprintf("error/%s", *object.Key)),
+					})
+					if err != nil {
+						fmt.Printf("error: Could not copy file to error folder:\n%v\n", err)
+						os.Exit(1)
+					}
+
+					_, err = s3client.DeleteObject(&s3.DeleteObjectInput{
+						Bucket: aws.String(bucket),
+						Key:    object.Key,
+					})
+					if err != nil {
+						fmt.Printf("error: Could not delete file from the Firehose folder:\n%v\n", err)
+						os.Exit(1)
+					}
+				}
 			}
 		}
 
