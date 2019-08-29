@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -100,7 +101,7 @@ func validJSON(data string) bool {
 }
 
 func checkReadiness(falcoEndpoint string, bucket_name string, region string) error {
-
+	// check if falco is available
 	httpClient := retryablehttp.NewClient()
 	_, err := httpClient.Get(falcoEndpoint)
 
@@ -113,6 +114,7 @@ func checkReadiness(falcoEndpoint string, bucket_name string, region string) err
 	}))
 	s3client := s3.New(sess)
 
+	// check if s3 bucket is reachable in terms of list operation
 	_, err = s3client.ListObjects(&s3.ListObjectsInput{
 		Bucket: aws.String(bucket_name),
 		Prefix: aws.String("/"),
@@ -121,6 +123,7 @@ func checkReadiness(falcoEndpoint string, bucket_name string, region string) err
 		return errors.Wrap(err, fmt.Sprintf("error: fail to list object. bucket name is %s", bucket_name))
 	}
 
+	// check if s3 bucket is reachable in terms of put operation
 	buf := bytes.NewReader([]byte("hello"))
 
 	uploader := s3manager.NewUploader(sess)
@@ -135,6 +138,7 @@ func checkReadiness(falcoEndpoint string, bucket_name string, region string) err
 		return errors.Wrap(err, fmt.Sprintf("error: fail to upload object. bucket name is %s", bucket_name))
 	}
 
+	// check if s3 bucket is reachable in terms of delete operation
 	_, err = s3client.DeleteObject(&s3.DeleteObjectInput{
 		Bucket: aws.String(bucket_name),
 		Key:    aws.String(fmt.Sprintf("%s", "test")),
@@ -200,9 +204,14 @@ func main() {
 		prefix = firehosePrefix
 	}
 
-	skip_error_log, ok := os.LookupEnv("SKIP_ERROR_LOG")
+	skip_error_log_tmp, ok := os.LookupEnv("SKIP_ERROR_LOG")
 	if !ok {
-		skip_error_log = "false"
+		skip_error_log_tmp = "false"
+	}
+
+	skip_error_log, err := strconv.ParseBool(skip_error_log_tmp)
+	if err != nil {
+		skip_error_log = false
 	}
 
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -214,7 +223,7 @@ func main() {
 		Jitter: true,
 	}
 
-	err := checkReadiness(falcoEndpoint, bucket, region)
+	err = checkReadiness(falcoEndpoint, bucket, region)
 
 	if err != nil {
 		fmt.Println(err)
@@ -291,7 +300,7 @@ func main() {
 				fmt.Printf("Could not decompress the Firehose events:\n%v\n", err)
 				errorEvents.With(prometheus.Labels{"type": "gzip"}).Inc()
 
-				if skip_error_log == "true" {
+				if skip_error_log {
 					err := skipErrorLog(region, bucket, *object.Key)
 					if err != nil {
 						fmt.Println(err)
@@ -370,7 +379,7 @@ func main() {
 			} else {
 				fmt.Printf("Object '%s' was not (fully) processed, not moving it to the processed folder.\n", *object.Key)
 
-				if skip_error_log == "true" {
+				if skip_error_log {
 					err := skipErrorLog(region, bucket, *object.Key)
 					if err != nil {
 						fmt.Println(err)
