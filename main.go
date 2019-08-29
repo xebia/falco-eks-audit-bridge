@@ -106,7 +106,7 @@ func checkReadiness(falcoEndpoint string, bucket_name string, region string) err
 	_, err := httpClient.Get(falcoEndpoint)
 
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("error: %s is unreachable", falcoEndpoint))
+		return errors.Wrap(err, fmt.Sprintf("Error: %s is unreachable", falcoEndpoint))
 	}
 
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -120,7 +120,7 @@ func checkReadiness(falcoEndpoint string, bucket_name string, region string) err
 		Prefix: aws.String("/"),
 	})
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("error: fail to list object. bucket name is %s", bucket_name))
+		return errors.Wrap(err, fmt.Sprintf("Error: fail to list object. bucket name is %s", bucket_name))
 	}
 
 	// check if s3 bucket is reachable in terms of put operation
@@ -129,25 +129,23 @@ func checkReadiness(falcoEndpoint string, bucket_name string, region string) err
 	uploader := s3manager.NewUploader(sess)
 	upParams := &s3manager.UploadInput{
 		Bucket: aws.String(bucket_name),
-		Key:    aws.String(fmt.Sprintf("%s", "test")),
+		Key:    aws.String(fmt.Sprintf("%s", "falco-audit-bridge-s3test")),
 		Body:   buf,
 	}
 
 	_, err = uploader.Upload(upParams)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("error: fail to upload object. bucket name is %s", bucket_name))
+		return errors.Wrap(err, fmt.Sprintf("Error: fail to upload object. bucket name is %s", bucket_name))
 	}
 
 	// check if s3 bucket is reachable in terms of delete operation
 	_, err = s3client.DeleteObject(&s3.DeleteObjectInput{
 		Bucket: aws.String(bucket_name),
-		Key:    aws.String(fmt.Sprintf("%s", "test")),
+		Key:    aws.String(fmt.Sprintf("%s", "falco-audit-bridge-s3test")),
 	})
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("error: fail to delete object. bucket name is %s", bucket_name))
+		return errors.Wrap(err, fmt.Sprintf("Error: fail to delete object. bucket name is %s", bucket_name))
 	}
-
-	fmt.Printf("All readiness checks are clear\n")
 
 	return nil
 }
