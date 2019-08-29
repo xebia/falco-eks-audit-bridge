@@ -333,13 +333,15 @@ func main() {
 				fmt.Printf("Object '%s' was not (fully) processed, not moving it to the processed folder.\n", *object.Key)
 
 				if skip_error_log == "true" {
+					fmt.Printf("Skipping error object '%s' by moving it to error folder.\n", *object.Key)
+
 					_, err = s3client.CopyObject(&s3.CopyObjectInput{
 						Bucket:     aws.String(bucket),
 						CopySource: aws.String(fmt.Sprintf("/%s/%s", bucket, *object.Key)),
 						Key:        aws.String(fmt.Sprintf("error/%s", *object.Key)),
 					})
 					if err != nil {
-						fmt.Printf("error: Could not copy file to error folder:\n%v\n", err)
+						fmt.Printf("Error: Could not copy file to error folder:\n%v\n", err)
 						os.Exit(1)
 					}
 
@@ -348,7 +350,7 @@ func main() {
 						Key:    object.Key,
 					})
 					if err != nil {
-						fmt.Printf("error: Could not delete file from the Firehose folder:\n%v\n", err)
+						fmt.Printf("Error: Could not delete file from the Firehose folder:\n%v\n", err)
 						os.Exit(1)
 					}
 				}
