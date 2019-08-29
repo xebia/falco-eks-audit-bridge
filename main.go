@@ -143,6 +143,36 @@ func checkReadiness(falcoEndpoint string, bucket_name string, region string) err
 		return errors.Wrap(err, fmt.Sprintf("error: fail to delete object. bucket name is %s", bucket_name))
 	}
 
+	fmt.Printf("All readiness checks are clear\n")
+
+	return nil
+}
+
+func skipErrorLog(region string, bucketName string, objName string) error {
+	fmt.Printf("Skipping error object '%s' by moving it to error folder.\n", objName)
+
+	sess := session.Must(session.NewSession(&aws.Config{
+		Region: aws.String(region),
+	}))
+	s3client := s3.New(sess)
+
+	_, err := s3client.CopyObject(&s3.CopyObjectInput{
+		Bucket:     aws.String(bucketName),
+		CopySource: aws.String(fmt.Sprintf("/%s/%s", bucketName, objName)),
+		Key:        aws.String(fmt.Sprintf("error/%s", objName)),
+	})
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("Error: Could not copy file to error folder:\n%v\n", err))
+	}
+
+	_, err = s3client.DeleteObject(&s3.DeleteObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(objName),
+	})
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("Error: Could not delete file from the Firehose folder:\n%v\n", err))
+	}
+
 	return nil
 }
 
@@ -260,6 +290,14 @@ func main() {
 			if err != nil {
 				fmt.Printf("Could not decompress the Firehose events:\n%v\n", err)
 				errorEvents.With(prometheus.Labels{"type": "gzip"}).Inc()
+
+				if skip_error_log == "true" {
+					err := skipErrorLog(region, bucket, *object.Key)
+					if err != nil {
+						fmt.Println(err)
+						os.Exit(1)
+					}
+				}
 				continue
 			}
 
@@ -333,24 +371,9 @@ func main() {
 				fmt.Printf("Object '%s' was not (fully) processed, not moving it to the processed folder.\n", *object.Key)
 
 				if skip_error_log == "true" {
-					fmt.Printf("Skipping error object '%s' by moving it to error folder.\n", *object.Key)
-
-					_, err = s3client.CopyObject(&s3.CopyObjectInput{
-						Bucket:     aws.String(bucket),
-						CopySource: aws.String(fmt.Sprintf("/%s/%s", bucket, *object.Key)),
-						Key:        aws.String(fmt.Sprintf("error/%s", *object.Key)),
-					})
+					err := skipErrorLog(region, bucket, *object.Key)
 					if err != nil {
-						fmt.Printf("Error: Could not copy file to error folder:\n%v\n", err)
-						os.Exit(1)
-					}
-
-					_, err = s3client.DeleteObject(&s3.DeleteObjectInput{
-						Bucket: aws.String(bucket),
-						Key:    object.Key,
-					})
-					if err != nil {
-						fmt.Printf("Error: Could not delete file from the Firehose folder:\n%v\n", err)
+						fmt.Println(err)
 						os.Exit(1)
 					}
 				}
