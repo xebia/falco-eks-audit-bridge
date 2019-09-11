@@ -5,16 +5,19 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"github.com/pkg/errors"
 	"io"
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/jpillora/backoff"
 	"github.com/prometheus/client_golang/prometheus"
@@ -35,6 +38,9 @@ const (
 
 	// checkInterval is the delay in minutes to check for new Firehose events
 	checkInterval = 2 * time.Minute
+
+	// default proc window
+	defaultProcWindowHour = 5
 )
 
 var (
@@ -97,6 +103,83 @@ func validJSON(data string) bool {
 	}
 }
 
+func checkReadiness(falcoEndpoint string, bucket_name string, region string) error {
+	// check if falco is available
+	httpClient := retryablehttp.NewClient()
+	_, err := httpClient.Get(falcoEndpoint)
+
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("Error: %s is unreachable", falcoEndpoint))
+	}
+
+	sess := session.Must(session.NewSession(&aws.Config{
+		Region: aws.String(region),
+	}))
+	s3client := s3.New(sess)
+
+	// check if s3 bucket is reachable in terms of list operation
+	_, err = s3client.ListObjects(&s3.ListObjectsInput{
+		Bucket: aws.String(bucket_name),
+		Prefix: aws.String("/"),
+	})
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("Error: fail to list object. bucket name is %s", bucket_name))
+	}
+
+	// check if s3 bucket is reachable in terms of put operation
+	buf := bytes.NewReader([]byte("hello"))
+
+	uploader := s3manager.NewUploader(sess)
+	upParams := &s3manager.UploadInput{
+		Bucket: aws.String(bucket_name),
+		Key:    aws.String(fmt.Sprintf("%s", "falco-audit-bridge-s3test")),
+		Body:   buf,
+	}
+
+	_, err = uploader.Upload(upParams)
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("Error: fail to upload object. bucket name is %s", bucket_name))
+	}
+
+	// check if s3 bucket is reachable in terms of delete operation
+	_, err = s3client.DeleteObject(&s3.DeleteObjectInput{
+		Bucket: aws.String(bucket_name),
+		Key:    aws.String(fmt.Sprintf("%s", "falco-audit-bridge-s3test")),
+	})
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("Error: fail to delete object. bucket name is %s", bucket_name))
+	}
+
+	return nil
+}
+
+func moveLogObject(region string, bucketName string, objName string, tgtPrefix string) error {
+	sess := session.Must(session.NewSession(&aws.Config{
+		Region: aws.String(region),
+	}))
+	s3client := s3.New(sess)
+
+	_, err := s3client.CopyObject(&s3.CopyObjectInput{
+		Bucket:     aws.String(bucketName),
+		CopySource: aws.String(fmt.Sprintf("/%s/%s", bucketName, objName)),
+		Key:        aws.String(fmt.Sprintf("%s/%s", tgtPrefix, objName)),
+	})
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("Error: Could not copy file to folder %s:\n%v\n", tgtPrefix, err))
+	}
+
+	_, err = s3client.DeleteObject(&s3.DeleteObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(objName),
+	})
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("Error: Could not delete file from the Firehose folder %s:\n%v\n", tgtPrefix, err))
+	}
+
+	return nil
+
+}
+
 func main() {
 
 	bucket, ok := os.LookupEnv("BUCKET")
@@ -121,6 +204,25 @@ func main() {
 		prefix = firehosePrefix
 	}
 
+	skip_error_log_tmp, ok := os.LookupEnv("SKIP_ERROR_LOG")
+	if !ok {
+		skip_error_log_tmp = "false"
+	}
+
+	skip_error_log, err := strconv.ParseBool(skip_error_log_tmp)
+	if err != nil {
+		skip_error_log = false
+	}
+
+	procWindowHour := defaultProcWindowHour
+	procWindowHour_tmp, ok := os.LookupEnv("PROC_WINDOW_HOUR")
+	if ok {
+		procWindowHour, err = strconv.Atoi(procWindowHour_tmp)
+		if err != nil {
+			procWindowHour = defaultProcWindowHour
+		}
+	}
+
 	sess := session.Must(session.NewSession(&aws.Config{
 		Region: aws.String(region),
 	}))
@@ -128,6 +230,13 @@ func main() {
 
 	b := &backoff.Backoff{
 		Jitter: true,
+	}
+
+	err = checkReadiness(falcoEndpoint, bucket, region)
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	httpClient := retryablehttp.NewClient()
@@ -182,6 +291,20 @@ func main() {
 				}
 			}
 
+			// Check if the object is not over-aged
+			now := time.Now()
+			sub := now.Sub(*object.LastModified)
+
+			if sub.Hours() > float64(procWindowHour) {
+				fmt.Printf("Skipping: object '%s' is too old to proc. (window size is %d hour)\n", *object.Key, procWindowHour)
+				err := moveLogObject(region, bucket, *object.Key, "processed")
+				if err != nil {
+					fmt.Println(err)
+					os.Exit(1)
+				}
+				continue
+			}
+
 			// Download the file from S3
 			file, err := s3client.GetObject(
 				&s3.GetObjectInput{
@@ -199,6 +322,14 @@ func main() {
 			if err != nil {
 				fmt.Printf("Could not decompress the Firehose events:\n%v\n", err)
 				errorEvents.With(prometheus.Labels{"type": "gzip"}).Inc()
+
+				if skip_error_log {
+					err := moveLogObject(region, bucket, *object.Key, "error")
+					if err != nil {
+						fmt.Println(err)
+						os.Exit(1)
+					}
+				}
 				continue
 			}
 
@@ -246,30 +377,22 @@ func main() {
 				// Track successfull processing
 				auditEvents.Inc()
 
-				_, err = s3client.CopyObject(&s3.CopyObjectInput{
-					Bucket:     aws.String(bucket),
-					CopySource: aws.String(fmt.Sprintf("/%s/%s", bucket, *object.Key)),
-					Key:        aws.String(fmt.Sprintf("processed/%s", *object.Key)),
-				})
-
+				err := moveLogObject(region, bucket, *object.Key, "processed")
 				if err != nil {
-					fmt.Printf("Could not copy file to processed folder:\n%v\n", err)
-					errorEvents.With(prometheus.Labels{"type": "s3-copy"}).Inc()
-					continue
-				}
-
-				_, err = s3client.DeleteObject(&s3.DeleteObjectInput{
-					Bucket: aws.String(bucket),
-					Key:    object.Key,
-				})
-
-				if err != nil {
-					fmt.Printf("Could not delete file from the Firehose folder:\n%v\n", err)
-					errorEvents.With(prometheus.Labels{"type": "s3-delete"}).Inc()
-					continue
+					fmt.Println(err)
+					os.Exit(1)
 				}
 			} else {
 				fmt.Printf("Object '%s' was not (fully) processed, not moving it to the processed folder.\n", *object.Key)
+
+				if skip_error_log {
+					fmt.Printf("Skipping error object '%s' by moving it to error folder.\n", *object.Key)
+					err := moveLogObject(region, bucket, *object.Key, "error")
+					if err != nil {
+						fmt.Println(err)
+						os.Exit(1)
+					}
+				}
 			}
 		}
 
