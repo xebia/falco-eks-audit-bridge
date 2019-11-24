@@ -1,0 +1,18 @@
+{{- if .Values.feab.service.enabled }}
+kind: Service
+apiVersion: v1
+metadata:
+  name: {{ .Values.feab.name }}
+  labels:
+    app: {{ template "feab.fullname" . }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+    heritage: "{{ .Release.Service }}"
+spec:
+  selector:
+    app: {{ template "feab.fullname" .}}
+  type: {{ .Values.feab.service.svcType }}
+  ports:
+  - protocol: TCP
+    port: {{ .Values.feab.service.listenPort }}
+{{- end }}

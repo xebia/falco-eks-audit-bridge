@@ -1,0 +1,28 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ template "feab.fullname" . }}
+  labels:
+    app: {{ template "feab.fullname" . }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+    heritage: "{{ .Release.Service }}"
+spec:
+  replicas:  {{ .Values.image.replicas }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "feab.fullname" . }}
+    spec:
+      serviceAccountName: {{ template "feab.serviceAccountName" .}}
+      containers:
+      - name: {{ template "feab.fullname" . }}-event-generator
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        imagePullPolicy: Always
+        env:
+          - name: BUCKET
+            value: {{ .Values.feab.bucket }}
+          - name: feab_ENDPOINT
+            value: {{ .Values.feab.falco_ep }}
+          - name: AWS_DEFAULT_REGION
+            value: {{ .Values.feab.aws_region }}
