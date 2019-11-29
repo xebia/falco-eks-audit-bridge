@@ -3,6 +3,7 @@ apiVersion: extensions/v1beta1
 kind: PodSecurityPolicy
 metadata:
   name: {{ template "feab.fullname" . }}
+  namespace: {{ .Values.image.namespace }}
   labels:
     app: {{ template "feab.fullname" . }}
     chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"

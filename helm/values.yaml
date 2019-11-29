@@ -3,7 +3,8 @@ image:
   repository: xebia/falco-eks-audit-bridge
   tag: v1.0.2
   pullPolicy: IfNotPresent
-  replicas: 1
+  replicas: 3
+  namespace: falco
 
 resources:
   requests:
@@ -44,7 +45,7 @@ feab:
     svcType: ClusterIP
     name: falco-feab-service
   bucket: 
-  falco_ep: http://falco-audit-service.falco.svc.cluster.local:8765/k8s_audit
+  falco_ep: http://falco-audit-service.{{NAMESPACE}}.svc.cluster.local:8765/k8s-audit
   aws_region: eu-west-1
 
 tolerations:
