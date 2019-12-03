@@ -2,7 +2,7 @@
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
-  name: {{ template "feab.fullname" .}}-cr
+  name: {{ template "feab.fullname" .}}
   namespace: {{ .Values.image.namespace }}
   labels:
     app: {{ template "feab.fullname" . }}

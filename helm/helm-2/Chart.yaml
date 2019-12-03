@@ -4,12 +4,10 @@ description: falco-eks-audit-bridge
 home: https://github.com/xebia/falco-eks-audit-bridge
 icon: https://falco.org/images/logos/falco-logo.png
 keywords:
-- monitoring
 - security
-- alerting
-- metric
-- troubleshooting
-- run-time
+- falco
+- eks
+- cloudwatch
 maintainers:
 - email: xxx.yyyy@xebia.com
   name: xxxxx

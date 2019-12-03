@@ -27,10 +27,6 @@ podSecurityPolicy:
 rbac:
   # Create and use rbac resources
   create: true
-  clusterRole:
-    name: cr
-  clusterRoleBinding:
-    name: crb
 
 serviceAccount:
   # Create and use serviceAccount resources
