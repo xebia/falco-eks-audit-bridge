@@ -1,4 +1,7 @@
 # Default values for falco-eks-audit-bridge
+global:
+  falco:
+    enabled: false
 
 image:
   registry: docker.io

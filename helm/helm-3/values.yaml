@@ -1,4 +1,7 @@
 # Default values for falco-eks-audit-bridge
+global:
+  falco:
+    enabled: false
 
 image:
   registry: docker.io
@@ -27,16 +30,12 @@ podSecurityPolicy:
 rbac:
   # Create and use rbac resources
   create: true
-  clusterRole:
-    name: cr
-  clusterRoleBinding:
-    name: crb
 
 serviceAccount:
   # Create and use serviceAccount resources
   create: true
   # Use this value as serviceAccountName
-  name: feab
+  name: feab12
 
 deployment:
   # Perform rolling updates by default in the DaemonSet agent

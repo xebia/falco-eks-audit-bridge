@@ -1,4 +1,4 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ template "feab.fullname" . }}
@@ -10,16 +10,21 @@ metadata:
     heritage: "{{ .Release.Service }}"
 spec:
   replicas:  {{ .Values.image.replicas }}
+  selector:
+    matchLabels:
+      app: {{ template "feab.fullname" . }}
   template:
     metadata:
       labels:
         app: {{ template "feab.fullname" . }}
     spec:
+     {{ if .Values.serviceAccount.create }}
       serviceAccountName: {{ template "feab.serviceAccountName" .}}
+     {{ end }}
       containers:
       - name: {{ template "feab.fullname" . }}
         image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
-        imagePullPolicy: Always
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
         env:
           - name: BUCKET
             value: {{ .Values.feab.bucket }}

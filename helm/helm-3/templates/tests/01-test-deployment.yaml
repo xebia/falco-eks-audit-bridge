@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name:  {{ .Release.Name }}-falco-audit-test
+  namespace: {{ .Values.image.namespace }}
+  annotations:
+    "helm.sh/hook": test-success
+spec:
+  containers:
+  - name: {{ .Release.Name }}-falco-audit-test
+    image: radial/busyboxplus:curl
+    imagePullPolicy: {{ .Values.image.pullPolicy }}
+    command:
+    - "sh"
+    - "-c"
+    - |
+      /bin/sh <<'EOF'
+      curl -s -I {{ template "feab.fullname" . }}-svc.{{ .Values.image.namespace }}.svc.cluster.local:{{ .Values.feab.service.listenPort }}
+      EOF
+  restartPolicy: Never

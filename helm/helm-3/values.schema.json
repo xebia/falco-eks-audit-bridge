@@ -1,0 +1,51 @@
+{
+    "$schema": "https://json-schema.org/draft-07/schema#",
+    "properties": {
+      "image": {
+        "description": "Container Image",
+        "properties": {
+          "registry": {
+            "type": "string"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "pullPolicy": {
+            "type": "string"
+          },
+          "replicas": {
+            "type": "integer"
+          },
+          "namespace": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "feab": {
+        "description": "Settings for Service and Falco",
+        "properties": {
+            "bucket": {
+              "type": "string"
+            },
+            "falco_ep": {
+              "type": "string"
+            },
+            "aws_region": {
+              "type": "string"
+            }
+          },
+        "type": "object"
+      }
+    },
+    "required": [
+      "image",
+      "feab"
+    ],
+    "title": "Values",
+    "type": "object"
+  }
+  

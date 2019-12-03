@@ -10,6 +10,9 @@ metadata:
     heritage: "{{ .Release.Service }}"
 spec:
   replicas:  {{ .Values.image.replicas }}
+  selector:
+    matchLabels:
+      app: {{ template "feab.fullname" . }}
   template:
     metadata:
       labels:
@@ -17,7 +20,7 @@ spec:
     spec:
      {{ if .Values.serviceAccount.create -}}
       serviceAccountName: {{ template "feab.serviceAccountName" .}}
-    {{ end -}}
+     {{ end -}}
       containers:
       - name: {{ template "feab.fullname" . }}
         image: {{ .Values.image.repository }}:{{ .Values.image.tag }}

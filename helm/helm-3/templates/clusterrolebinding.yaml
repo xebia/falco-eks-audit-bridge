@@ -2,7 +2,7 @@
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
-  name: {{ template "feab.fullname" .}}-crb
+  name: {{ template "feab.fullname" .}}
   namespace: {{ .Values.image.namespace }}
   labels:
     app: {{ template "feab.fullname" . }}
@@ -12,9 +12,9 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: {{ template "feab.serviceAccountName" .}}
-    namespace: {{ .Release.Namespace }}
+    namespace: {{ .Values.image.namespace }}
 roleRef:
   kind: ClusterRole
-  name: {{ template "feab.fullname" .}}-cr
+  name: {{ template "feab.fullname" .}}
   apiGroup: rbac.authorization.k8s.io
 {{- end }}
