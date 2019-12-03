@@ -1,4 +1,4 @@
-Falco agents are spinning up on each node in your cluster. After a few
+Falco-EKS-Audit-Bridge agents are spinning up on nodes in your cluster. After a few
 seconds, they are going to start monitoring your containers looking for
 security issues.
 
