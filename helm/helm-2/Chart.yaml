@@ -11,8 +11,10 @@ keywords:
 - troubleshooting
 - run-time
 maintainers:
-- email: xxx.yyyy@sysdig.com
+- email: xxx.yyyy@xebia.com
   name: xxxxx
+- email: sandeeplamb@gmail.com
+  name: sandeep lamba
 name: falco-eks-audit-bridge
 sources:
 - https://github.com/xebia/falco-eks-audit-bridge
