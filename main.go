@@ -35,6 +35,9 @@ const (
 
 	// checkInterval is the delay in minutes to check for new Firehose events
 	checkInterval = 2 * time.Minute
+
+	// magicNumberMessageLength is the minimum length of the event. Sometimes event like "54" is recongnized as valid json
+	magicNumberMessageLength = 10
 )
 
 var (
@@ -85,6 +88,9 @@ func init() {
 // validJSON parses the JSON while discarding the contents.
 // It returns true for valid JSON, false otherwise.
 func validJSON(data string) bool {
+	if len(data) < magicNumberMessageLength {
+		return false
+	}
 	dec := json.NewDecoder(bytes.NewReader([]byte(data)))
 	for {
 		_, err := dec.Token()
