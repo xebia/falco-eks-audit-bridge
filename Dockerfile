@@ -1,16 +1,21 @@
-FROM golang:alpine as builder
-
-RUN mkdir /build
-ADD . /build/
-WORKDIR /build
-RUN CGO_ENABLED=0 GOOS=linux go build -mod vendor -a -installsuffix cgo -ldflags '-extldflags "-static"' -o falco-eks-audit-bridge . && \
-    apk add -U --no-cache ca-certificates
-
-FROM scratch
-
-COPY --from=builder /build/falco-eks-audit-bridge /app/
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+FROM golang:alpine AS builder
 
 WORKDIR /app
 
-CMD ["./falco-eks-audit-bridge"]
+# Install git.
+# Git is required for fetching the dependencies.
+RUN apk update && apk add --no-cache git
+
+COPY . .
+
+RUN go mod download
+    # Build the binary.
+RUN CGO_ENABLED=0 GOOS=linux go build -o falco-eks-audit-bridge -v
+
+FROM gcr.io/distroless/base
+
+COPY --from=builder /app/falco-eks-audit-bridge /app/falco-eks-audit-bridge
+
+# Run the falco-eks-audit-bridge binary.
+ENTRYPOINT ["/app/falco-eks-audit-bridge"]
+

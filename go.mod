@@ -1,6 +1,8 @@
-module github.com/xebia/falco-eks-audit-bridge
+module github.com/nutmegdevelopment/falco-eks-audit-bridge
 
-go 1.12
+go 1.15
+
+replace github.com/nutmegdevelopment/argocd-scaler => /home/crystal/Nutmeg/argocd-scaler
 
 require (
 	github.com/aws/aws-sdk-go v1.36.5
