@@ -8,9 +8,8 @@ RUN apk update && apk add --no-cache git
 
 COPY . .
 
-RUN go mod download
-    # Build the binary.
-RUN CGO_ENABLED=0 GOOS=linux go build -o falco-eks-audit-bridge -v
+RUN go mod download && \
+	CGO_ENABLED=0 GOOS=linux go build -o falco-eks-audit-bridge -v
 
 FROM gcr.io/distroless/base
 
