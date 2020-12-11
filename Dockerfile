@@ -9,7 +9,7 @@ RUN apk update && apk add --no-cache git
 COPY . .
 
 RUN go mod download && \
-	CGO_ENABLED=0 GOOS=linux go build -o falco-eks-audit-bridge -v
+	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o falco-eks-audit-bridge -v
 
 FROM gcr.io/distroless/base
 
