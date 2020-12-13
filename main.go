@@ -103,6 +103,14 @@ func validJSON(data string) bool {
 	}
 }
 
+func client(region string) *s3.S3 {
+	sess := session.Must(session.NewSession(&aws.Config{
+		Region: aws.String(region),
+	}))
+	s3client := s3.New(sess)
+	return s3client
+}
+
 func main() {
 
 	bucket, ok := os.LookupEnv("BUCKET")
@@ -127,10 +135,8 @@ func main() {
 		prefix = firehosePrefix
 	}
 
-	sess := session.Must(session.NewSession(&aws.Config{
-		Region: aws.String(region),
-	}))
-	s3client := s3.New(sess)
+	// get session
+	s3client := client(region)
 
 	b := &backoff.Backoff{
 		Jitter: true,
@@ -197,6 +203,10 @@ func main() {
 			if err != nil {
 				fmt.Printf("Could not download the Firehose events file:\n%v\n", err)
 				errorEvents.With(prometheus.Labels{"type": "s3-get"}).Inc()
+				if strings.Contains(string(err.Error()), "ExpiredToken") {
+					// update session
+					s3client = client(region)
+				}
 				continue
 			}
 
