@@ -1,0 +1,73 @@
+# Default values for falco-eks-audit-bridge
+global:
+  falco:
+    enabled: false
+
+image:
+  registry: docker.io
+  repository: xebia/falco-eks-audit-bridge
+  tag: v1.0.2
+  pullPolicy: IfNotPresent
+  replicas: 3
+  namespace: falco
+
+resources:
+  # Although resources needed are subjective on the actual workload we provide
+  # a sane defaults ones.
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 200m
+    memory: 512Mi
+
+extraArgs: []
+
+podSecurityPolicy:
+  # Create a podSecurityPolicy
+  create: false
+
+rbac:
+  # Create and use rbac resources
+  create: true
+
+serviceAccount:
+  # Create and use serviceAccount resources
+  create: true
+  # Use this value as serviceAccountName
+  name: feab
+
+deployment:
+  # Perform rolling updates by default in the DaemonSet agent
+  # ref: https://kubernetes.io/docs/tasks/manage-daemon/update-daemon-set/
+  updateStrategy:
+    # You can also customize maxUnavailable, maxSurge or minReadySeconds if you
+    # need it
+    type: RollingUpdate
+  ## Extra environment variables that will be pass onto deployment pods
+  env: {}
+
+# If is behind a proxy you can set the proxy server
+proxy:
+  httpProxy: "http://webproxy:3128"
+  httpsProxy: "http://webproxy:3128"
+  noProxy: ".plc,.local,localhost,169.254.169.254,169.254.170.2"
+
+# Set daemonset timezone
+timezone:
+
+# falco-eks-audit-bridge settings for service and Falco
+feab:
+  service:
+    enabled: true
+    listenPort: 8080
+    svcType: ClusterIP
+    name: falco-feab-service
+  bucket: ""
+  falco_ep: http://{{ FALCO-AUDIT-SERVICE }}.{{ NAMESPACE }}.svc.cluster.local:8765/k8s-audit
+  aws_region: eu-west-1
+
+# Tolerations for falco-eks-audit-bridge Pods
+tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master

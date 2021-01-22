@@ -1,0 +1,33 @@
+apiVersion: v1
+appVersion: 1.0.2
+version: 1.0.2
+type: application
+kubeVersion: '>=1.11.8-eks-7c34c0'
+engine: gotpl
+deprecated: false
+description: falco-eks-audit-bridge
+home: https://github.com/xebia/falco-eks-audit-bridge
+icon: https://falco.org/images/logos/falco-logo.png
+keywords:
+- security
+- falco
+- eks
+- cloudwatch
+maintainers:
+- email: xxx.yyyy@xebia.com
+  name: xxxxx
+- email: sandeeplamb@gmail.com
+  name: sandeep lamba
+name: falco-eks-audit-bridge
+sources:
+- https://github.com/xebia/falco-eks-audit-bridge
+### dependencies
+# dependencies: 
+#   - name: falco
+#     version: 1.0.10
+#     repository: https://kubernetes-charts.storage.googleapis.com
+#     condition: global.falco.enabled
+#     tags:
+#       - falco
+#       - security
+#       - stable
